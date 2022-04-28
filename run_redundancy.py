@@ -26,20 +26,14 @@ See options/base_options.py and options/test_options.py for more test options.
 See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/tips.md
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
+from glob import glob
 import os
-from options.test_options import TestOptions
-from data import create_dataset
-from models import create_model
-from util.visualizer import save_images
-from util import html
-from util.util import tensor2im
-import cv2
-import numpy as np
+from PIL import Image
+from tqdm import tqdm
 
-try:
-    import wandb
-except ImportError:
-    print('Warning: wandb package cannot be found. The option "--use_wandb" will result in error.')
+from data.base_dataset import get_transform
+from models import create_model
+from options.test_options import TestOptions
 
 
 if __name__ == '__main__':
@@ -50,48 +44,23 @@ if __name__ == '__main__':
     opt.serial_batches = True  # disable data shuffling; comment this line if results on randomly chosen images are needed.
     opt.no_flip = True    # no flip; comment this line if results on flipped images are needed.
     opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
-    
-    dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
 
-    # initialize logger
-    if opt.use_wandb:
-        wandb_run = wandb.init(project='CycleGAN-and-pix2pix', name=opt.name, config=opt) if not wandb.run else wandb.run
-        wandb_run._label(repo='CycleGAN-and-pix2pix')
-
-    # create a website
-    web_dir = os.path.join(opt.results_dir, opt.name, '{}_{}'.format(opt.phase, opt.epoch))  # define the website directory
-    if opt.load_iter > 0:  # load_iter is 0 by default
-        web_dir = '{:s}_iter{:d}'.format(web_dir, opt.load_iter)
-    print('creating web directory', web_dir)
-    webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch))
-    
-    # test
     # test with eval mode. This only affects layers like batchnorm and dropout.
     # For [pix2pix]: we use batchnorm and dropout in the original pix2pix. You can experiment it with and without eval() mode.
     # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
     if opt.eval:
         model.eval()
-    if opt.dataset_mode == "video":
-        model.test_video(web_dir)
-    else: # frame-independent inference
-        #video = cv2.VideoWriter(os.path.join(web_dir, "video.mp4"), fourcc=cv2.VideoWriter_fourcc(*'mp4v'), fps=10, frameSize=(256*2, 256))
-        for i, data in enumerate(dataset):
-            if i >= opt.num_test:  # only apply our model to opt.num_test images.
-                break
-            model.set_input(data)  # unpack data from data loader
-            model.test()           # run inference
-            visuals = model.get_current_visuals()  # get image results
-            img_path = model.get_image_paths()     # get image paths
-            # if i % 5 == 0:  # save images to an HTML file
-            #     print('processing (%04d)-th image... %s' % (i, img_path))
-            # save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize, use_wandb=opt.use_wandb)
-            # real_A = visuals['real_A'].cpu()
-            # fake_B = visuals['fake_B'].cpu()
-            # real_A = tensor2im(real_A)
-            # fake_B = tensor2im(fake_B)
-            # cat_img = np.concatenate((real_A, fake_B), axis=1)
-            # cat_img = cv2.cvtColor(cat_img, cv2.COLOR_RGB2BGR)
-            # video.write(cat_img)
-        webpage.save()  # save the HTML
+    print(model.netG_A)
+    exit()
+
+    transform = get_transform(opt, grayscale=False)
+
+    paths = sorted(glob(os.path.join(opt.dataroot, 'Viper/val/img/*')))
+    for path in tqdm(paths, desc='Test       ', position=0, leave=False):
+        filenames = sorted(os.listdir(path))
+        for filename in tqdm(filenames, desc='Frame      ', position=1, leave=False):
+            A_img = Image.open(os.path.join(path, filename)).convert("RGB")
+            A = transform(A_img).cuda()
+            model.netG_A(A)

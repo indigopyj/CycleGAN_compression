@@ -5,7 +5,7 @@ import ntpath
 import time
 from . import util, html
 from subprocess import Popen, PIPE
-
+from tensorboardX import SummaryWriter
 
 try:
     import wandb
@@ -78,7 +78,12 @@ class Visualizer():
         self.use_wandb = opt.use_wandb
         self.current_epoch = 0
         self.ncols = opt.display_ncols
-        
+        self.writer = None
+        if self.opt.tensorboard_dir != None:
+            self.tensorboard_dir = os.path.join(opt.tensorboard_dir, self.opt.name)
+            os.makedirs(self.tensorboard_dir, exist_ok=True)
+            self.writer = SummaryWriter(self.tensorboard_dir)
+            
         if self.display_id > 0:  # connect to a visdom server given <display_port> and <display_server>
             import visdom
             self.vis = visdom.Visdom(server=opt.display_server, port=opt.display_port, env=opt.display_env)
@@ -236,6 +241,16 @@ class Visualizer():
             self.create_visdom_connections()
         if self.use_wandb:
             self.wandb_run.log(losses)
+            
+    def plot_tb(self, losses, step):
+        """display the current losses on tensorboard display: dictionary of error labels and values
+        """
+        if len(losses) == 0:
+            return
+        for k, v in losses.items():
+            self.writer.add_scalar(k,v, global_step=step)
+        self.writer.flush()
+        
 
     # losses: same format as |losses| of plot_current_losses
     def print_current_losses(self, epoch, iters, losses, t_comp, t_data):

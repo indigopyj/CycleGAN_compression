@@ -12,17 +12,25 @@ The processed images will be placed at --output_dir.
 Example usage:
 
 python prepare_cityscapes_dataset.py --gtFine_dir ./gtFine/ --leftImg8bit_dir ./leftImg8bit --output_dir ./datasets/cityscapes/
+python prepare_cityscapes_dataset.py --gtFine_dir /dataset/Viper/train/cls --leftImg8bit_dir ../dataset/Viper/train/img --output_dir ./datasets/viper/
 """
 
 def load_resized_img(path):
     return Image.open(path).convert('RGB').resize((256, 256))
 
 def check_matching_pair(segmap_path, photo_path):
-    segmap_identifier = os.path.basename(segmap_path).replace('_gtFine_color', '')
-    photo_identifier = os.path.basename(photo_path).replace('_leftImg8bit', '')
+    segmap_identifier = os.path.basename(segmap_path)
+    photo_identifier = os.path.basename(photo_path)
         
     assert segmap_identifier == photo_identifier, \
         "[%s] and [%s] don't seem to be matching. Aborting." % (segmap_path, photo_path)
+        
+# def check_matching_pair(segmap_path, photo_path):
+#     segmap_identifier = os.path.basename(segmap_path).replace('_gtFine_color', '')
+#     photo_identifier = os.path.basename(photo_path).replace('_leftImg8bit', '')
+        
+#     assert segmap_identifier == photo_identifier, \
+#         "[%s] and [%s] don't seem to be matching. Aborting." % (segmap_path, photo_path)
     
 
 def process_cityscapes(gtFine_dir, leftImg8bit_dir, output_dir, phase):
@@ -33,11 +41,13 @@ def process_cityscapes(gtFine_dir, leftImg8bit_dir, output_dir, phase):
     os.makedirs(savedir + 'B', exist_ok=True)
     print("Directory structure prepared at %s" % output_dir)
     
-    segmap_expr = os.path.join(gtFine_dir, phase) + "/*/*_color.png"
+    segmap_expr = gtFine_dir + "/*/*.png"
+    #segmap_expr = os.path.join(gtFine_dir, phase) + "/*/*_color.png"
     segmap_paths = glob.glob(segmap_expr)
     segmap_paths = sorted(segmap_paths)
 
-    photo_expr = os.path.join(leftImg8bit_dir, phase) + "/*/*_leftImg8bit.png"
+    photo_expr = leftImg8bit_dir + "/*/*.jpg"
+    #photo_expr = os.path.join(leftImg8bit_dir, phase) + "/*/*_leftImg8bit.png"
     photo_paths = glob.glob(photo_expr)
     photo_paths = sorted(photo_paths)
 

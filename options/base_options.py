@@ -4,6 +4,7 @@ from util import util
 import torch
 import models
 import data
+import pickle
 
 
 class BaseOptions():
@@ -26,7 +27,7 @@ class BaseOptions():
         parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
         # model parameters
-        parser.add_argument('--model', type=str, default='cycle_gan', help='chooses which model to use. [cycle_gan | pix2pix | test | colorization]')
+        parser.add_argument('--model', type=str, default='cycle_gan', help='chooses which model to use. [cycle_gan | pix2pix | test | colorization, RED]')
         parser.add_argument('--input_nc', type=int, default=3, help='# of input image channels: 3 for RGB and 1 for grayscale')
         parser.add_argument('--output_nc', type=int, default=3, help='# of output image channels: 3 for RGB and 1 for grayscale')
         parser.add_argument('--ngf', type=int, default=64, help='# of gen filters in the last conv layer')
@@ -55,6 +56,17 @@ class BaseOptions():
         parser.add_argument('--load_iter', type=int, default='0', help='which iteration to load? if load_iter > 0, the code will load models by iter_[load_iter]; otherwise, the code will load models by [epoch]')
         parser.add_argument('--verbose', action='store_true', help='if specified, print more debugging information')
         parser.add_argument('--suffix', default='', type=str, help='customized suffix: opt.name = opt.name + suffix: e.g., {model}_{netG}_size{load_size}')
+        # added on 0414
+        parser.add_argument('--main_G_path', type=str, default=None, help='path of main generator')
+        parser.add_argument("--label_nc", type=int, default=0, help='# of input label channels')
+        parser.add_argument('--tensorboard_dir', type=str, default=None, help='models are saved here')
+        parser.add_argument("--layer_idx", type=int, default=13)
+        parser.add_argument("--max_interval", type=int, default=5)
+        parser.add_argument('--Viper2Cityscapes', action='store_true', help="dataset setting")
+        
+        parser.add_argument("--GAN_loss", action="store_true")
+
+        # additional param
         self.initialized = True
         return parser
 
@@ -110,6 +122,9 @@ class BaseOptions():
         with open(file_name, 'wt') as opt_file:
             opt_file.write(message)
             opt_file.write('\n')
+        # file_name = os.path.join(expr_dir, '{}_opt.pkl'.format(opt.phase))
+        # with open(file_name, 'wb') as opt_file:
+        #     pickle.dump(opt, opt_file)
 
     def parse(self):
         """Parse our options, create checkpoints directory suffix, and set up gpu device."""

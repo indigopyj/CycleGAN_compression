@@ -3,7 +3,17 @@ import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
+from data import CustomDatasetDataLoader
+import copy
 
+def create_eval_dataloader(opt):
+    opt = copy.deepcopy(opt)
+    opt.isTrain = False
+    opt.serial_batches = True
+    opt.phase = 'test'
+    dataloader = CustomDatasetDataLoader(opt)
+    dataloader = dataloader.load_data()
+    return dataloader
 
 class CycleGANModel(BaseModel):
     """
@@ -51,6 +61,8 @@ class CycleGANModel(BaseModel):
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
         BaseModel.__init__(self, opt)
+        
+            
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
         self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
@@ -108,6 +120,29 @@ class CycleGANModel(BaseModel):
         self.real_A = input['A' if AtoB else 'B'].to(self.device)
         self.real_B = input['B' if AtoB else 'A'].to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
+        
+        # if self.opt.label_nc != 0:
+        #     bs, _, height, width = self.real_A.shape
+        #     # create one-hot vector for label map
+        #     oneHot_size = (bs, self.opt.label_nc, height, width)
+        #     input_label = torch.cuda.FloatTensor(torch.Size(oneHot_size)).zero_()
+        #     self.real_A = input_label.scatter_(1, self.real_A.long(), 1.0)
+    def set_test_input(self, img_path):
+        """Unpack input data from the dataloader and perform necessary pre-processing steps.
+
+        Parameters:
+            input (dict): include the data itself and its metadata information.
+
+        The option 'direction' can be used to swap domain A and domain B.
+        """
+        from PIL import Image
+        from data.base_dataset import get_transform
+        self.transform = get_transform(self.opt, grayscale=False)
+        
+        AtoB = self.opt.direction == 'AtoB'
+        self.real_A = Image.open(img_path).convert("RGB")
+        self.real_A = self.transform(self.real_A).unsqueeze(0).to(self.device)
+        self.image_paths = img_path
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
@@ -192,3 +227,35 @@ class CycleGANModel(BaseModel):
         self.backward_D_A()      # calculate gradients for D_A
         self.backward_D_B()      # calculate graidents for D_B
         self.optimizer_D.step()  # update D_A and D_B's weights
+        
+    def test_video(self, result_path):
+        import os
+        from tqdm import tqdm
+        import cv2
+        from util.util import tensor2im, save_image
+        import numpy as np
+        assert self.opt.dataset_mode == "video"
+        self.eval_dataloader = create_eval_dataloader(self.opt)
+        self.save_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
+        os.makedirs(result_path, exist_ok=True)
+
+        with torch.no_grad():
+            for seq_idx, seq_i in enumerate(tqdm(self.eval_dataloader, desc='Eval       ', position=2, leave=False)):
+                if seq_idx >= self.opt.num_test:  # only apply our model to opt.num_test videos.
+                    break
+                
+                vid_name = seq_i['seq_path'][0].split("/")[-1]
+                video = cv2.VideoWriter(os.path.join(result_path, vid_name+'.mp4'), fourcc=cv2.VideoWriter_fourcc(*'mp4v'), fps=5, frameSize=(256*2 , 256))
+                img_list = sorted(os.listdir(seq_i['seq_path'][0]))[:400] # limit length of test video
+                for i, data_i in enumerate(img_list):
+                    data_path = os.path.join(seq_i['seq_path'][0], data_i)
+                    self.set_test_input(data_path)
+                    fake_im = self.netG_A(self.real_A)
+                    name = f"{seq_i['seq_path'][0]}_{i}.png"
+                    input_im = tensor2im(self.real_A)
+                    fake_im = tensor2im(fake_im)
+                    cat_img = np.concatenate((input_im, fake_im), axis=1)
+                    save_image(input_im, os.path.join(result_path, 'input', '%s' % name), create_dir=True)
+                    save_image(fake_im, os.path.join(result_path, 'fake', '%s' % name), create_dir=True)
+                    cat_img = cv2.cvtColor(cat_img, cv2.COLOR_RGB2BGR)
+                    video.write(cat_img)

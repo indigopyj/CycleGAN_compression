@@ -3,6 +3,7 @@ import torch
 from collections import OrderedDict
 from abc import ABC, abstractmethod
 from . import networks
+from torch.nn import DataParallel
 
 
 class BaseModel(ABC):
@@ -87,6 +88,35 @@ class BaseModel(ABC):
             load_suffix = 'iter_%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
             self.load_networks(load_suffix)
         self.print_networks(opt.verbose)
+        
+    def setup_only_G_or_D(self, opt, model_name, G_path):
+        """Load and print networks; create schedulers
+
+        Parameters:
+            opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
+        """
+        if self.isTrain:
+            self.schedulers = [networks.get_scheduler(optimizer, opt) for optimizer in self.optimizers]
+        name = model_name
+        if isinstance(name, str):
+            load_path = G_path
+            net = getattr(self, 'net' + name)
+            if isinstance(net, torch.nn.DataParallel):
+                net = net.module
+            print('loading the model from %s' % load_path)
+            # if you are using PyTorch newer than 0.4 (e.g., built from
+            # GitHub source), you can remove str() on self.device
+            state_dict = torch.load(load_path, map_location=str(self.device))
+            if hasattr(state_dict, '_metadata'):
+                del state_dict._metadata
+
+            # patch InstanceNorm checkpoints prior to 0.4
+            for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
+                self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
+        net.load_state_dict(state_dict)
+        if opt.verbose:
+            print(net)
+        #self.print_networks(opt.verbose)
 
     def eval(self):
         """Make models eval mode during test time"""
@@ -154,7 +184,10 @@ class BaseModel(ABC):
                 net = getattr(self, 'net' + name)
 
                 if len(self.gpu_ids) > 0 and torch.cuda.is_available():
-                    torch.save(net.module.cpu().state_dict(), save_path)
+                    if isinstance(net, DataParallel):
+                        torch.save(net.module.cpu().state_dict(), save_path)
+                    else:
+                        torch.save(net.cpu().state_dict(), save_path)
                     net.cuda(self.gpu_ids[0])
                 else:
                     torch.save(net.cpu().state_dict(), save_path)

@@ -29,7 +29,7 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 import os
 from options.test_options import TestOptions
 from data import create_dataset
-from models import create_model
+from models import create_model, create_model_RED
 from util.visualizer import save_images
 from util import html
 from util.util import tensor2im
@@ -50,10 +50,14 @@ if __name__ == '__main__':
     opt.serial_batches = True  # disable data shuffling; comment this line if results on randomly chosen images are needed.
     opt.no_flip = True    # no flip; comment this line if results on flipped images are needed.
     opt.display_id = -1   # no visdom display; the test code saves the results to a HTML file.
-    
-    dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
-    model = create_model(opt)      # create a model given opt.model and other options
-    model.setup(opt)               # regular setup: load and print networks; create schedulers
+    opt.model_suffix = '_A'
+    opt.model = "cycle_gan"
+    mainG_path = opt.main_G_path
+    model = create_model_RED(opt)      # create a RED model
+    mainG = create_model(opt) # create main generator
+    mainG.setup_only_G_or_D(opt, "G_A", mainG_path) # setup main generator with default option
+    model.setup_with_G(opt, mainG) # setup RED model with default option
+    dataset = create_dataset(opt)
 
     # initialize logger
     if opt.use_wandb:
@@ -68,30 +72,16 @@ if __name__ == '__main__':
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch))
     
     # test
+    #video = cv2.VideoWriter(os.path.join(web_dir, "video.avi"), fourcc=cv2.VideoWriter_fourcc(*'DIVX'), fps=30, frameSize=(512, 256))
     # test with eval mode. This only affects layers like batchnorm and dropout.
     # For [pix2pix]: we use batchnorm and dropout in the original pix2pix. You can experiment it with and without eval() mode.
     # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
     if opt.eval:
         model.eval()
-    if opt.dataset_mode == "video":
-        model.test_video(web_dir)
-    else: # frame-independent inference
-        #video = cv2.VideoWriter(os.path.join(web_dir, "video.mp4"), fourcc=cv2.VideoWriter_fourcc(*'mp4v'), fps=10, frameSize=(256*2, 256))
-        for i, data in enumerate(dataset):
-            if i >= opt.num_test:  # only apply our model to opt.num_test images.
-                break
-            model.set_input(data)  # unpack data from data loader
-            model.test()           # run inference
-            visuals = model.get_current_visuals()  # get image results
-            img_path = model.get_image_paths()     # get image paths
-            # if i % 5 == 0:  # save images to an HTML file
-            #     print('processing (%04d)-th image... %s' % (i, img_path))
-            # save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize, use_wandb=opt.use_wandb)
-            # real_A = visuals['real_A'].cpu()
-            # fake_B = visuals['fake_B'].cpu()
-            # real_A = tensor2im(real_A)
-            # fake_B = tensor2im(fake_B)
-            # cat_img = np.concatenate((real_A, fake_B), axis=1)
-            # cat_img = cv2.cvtColor(cat_img, cv2.COLOR_RGB2BGR)
-            # video.write(cat_img)
-        webpage.save()  # save the HTML
+    model.test_model(web_dir)
+    # for i, data in enumerate(dataset):
+    #     if i >= opt.num_test:  # only apply our model to opt.num_test images.
+    #         break
+        
+        
+    webpage.save()  # save the HTML
