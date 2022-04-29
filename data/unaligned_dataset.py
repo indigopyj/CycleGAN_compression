@@ -32,6 +32,10 @@ class UnalignedDataset(BaseDataset):
         BaseDataset.__init__(self, opt)
         
         if opt.Viper2Cityscapes:
+            if opt.phase == "test" or opt.phase == "val":
+                phase = "val"
+            else:
+                phase = "train"
             self.dir_A = os.path.join(opt.dataroot, 'Viper', opt.phase, 'img')
             self.dir_B = os.path.join(opt.dataroot, "Cityscapes_sequence", "leftImg8bit_sequence", opt.phase)
         else:

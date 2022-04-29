@@ -45,12 +45,12 @@ class VideoDataset(BaseDataset):
         if self.opt.Viper2Cityscapes:
             seq_path = os.path.join(self.dir_A, self.seq_list[index])
             A_path = sorted(os.listdir(seq_path))
-            interval = torch.randint(1, 10, [1]).item()
+            interval = torch.randint(1, self.opt.max_interval, [1]).item()
             idx1 = torch.randint(0, len(A_path) - interval, [1]).item()
             img_root = seq_path
         else: # ffs dataset
             A_path = sorted(os.listdir(self.dir_A))
-            interval = torch.randint(1, 10, [1]).item()
+            interval = torch.randint(1, self.opt.max_interval, [1]).item()
             idx1 = index
             img_root = self.dir_A
             if idx1 >= len(A_path) - interval: # clipping
