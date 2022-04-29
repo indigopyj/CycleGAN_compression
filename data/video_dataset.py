@@ -46,7 +46,10 @@ class VideoDataset(BaseDataset):
             seq_path = os.path.join(self.dir_A, self.seq_list[index])
             A_path = sorted(os.listdir(seq_path))
             interval = torch.randint(1, self.opt.max_interval, [1]).item()
-            idx1 = torch.randint(0, len(A_path) - interval, [1]).item()
+            if self.opt.phase != 'train':
+                idx1 = torch.randint(0, len(A_path) - self.opt.max_interval, [1]).item()
+            else:
+                idx1 = torch.randint(0, len(A_path) - interval, [1]).item()
             img_root = seq_path
         else: # ffs dataset
             A_path = sorted(os.listdir(self.dir_A))
@@ -74,12 +77,10 @@ class VideoDataset(BaseDataset):
 
         img1 = self.transform(img1)
         img2 = self.transform(img2)
-        if self.opt.phase == "train" or self.opt.phase == "val":
-            img_path = A_path[idx1].split(".")[0] + f"_{interval}.png"
-        else:
-            img_path = A_path[idx1]
+        
 
-        return {'img1': img1, 'img2': img2, 'img_paths': img_path}
+        return {'img1': img1, 'img2': img2, "img1_paths": A_path[idx1], "img_root": img_root}
+
         
         
 

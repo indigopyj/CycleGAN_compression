@@ -6,7 +6,7 @@ from PIL import Image
 import os
 
 
-def tensor2im(input_image, imtype=np.uint8):
+def tensor2im(input_image, imtype=np.uint8, idx=0):
     """"Converts a Tensor array into a numpy image array.
 
     Parameters:
@@ -18,7 +18,7 @@ def tensor2im(input_image, imtype=np.uint8):
             image_tensor = input_image.data
         else:
             return input_image
-        image_numpy = image_tensor[0].cpu().float().numpy()  # convert it into a numpy array
+        image_numpy = image_tensor[idx].cpu().float().numpy()  # convert it into a numpy array
         if image_numpy.shape[0] == 1:  # grayscale to RGB
             image_numpy = np.tile(image_numpy, (3, 1, 1))
         image_numpy = (np.transpose(image_numpy, (1, 2, 0)) + 1) / 2.0 * 255.0  # post-processing: tranpose and scaling
@@ -64,6 +64,8 @@ def save_image(image_numpy, image_path, aspect_ratio=1.0, create_dir=False):
         image_pil = image_pil.resize((int(h / aspect_ratio), w), Image.BICUBIC)
     image_pil.save(image_path)
 
+    # save to png
+    #image_pil.save(image_path.replace('.jpg', '.png'))
 
 def print_numpy(x, val=True, shp=False):
     """Print the mean, min, max, median, std, and size of a numpy array

@@ -97,15 +97,21 @@ class REDModel(BaseModel):
     def set_input(self, input):
         self.img1 = input['img1'].to(self.device)
         self.img2 = input['img2'].to(self.device)
-        self.image_paths = input['img_paths']
+        self.img1_paths = input['img1_paths']
+        self.image_root = input['img_root']
+
     
-    def set_test_input(self, img_path):
+    def set_test_input(self, img_paths):
         from PIL import Image
         from data.base_dataset import get_transform
         self.transform = get_transform(self.opt, grayscale=False)
-        self.img1 = Image.open(img_path).convert("RGB")
-        self.img1 = self.transform(self.img1).unsqueeze(0).to(self.device)
-        self.image_paths = img_path
+        self.next_img_paths = img_paths
+        self.next_img = []
+        for i in range(len(img_paths)):
+            next_img = Image.open(img_paths[i]).convert("RGB")
+            next_img = self.transform(next_img).unsqueeze(0)
+            self.next_img.append(next_img)
+        self.next_img = torch.cat(self.next_img, dim=0).to(self.device)
 
     def forward(self):
         b = self.img1.size(0)
@@ -166,30 +172,39 @@ class REDModel(BaseModel):
         self.netR.eval()
         
         
-        with torch.no_grad():
+        with torch.no_grad(): 
             for i, data_i in enumerate(tqdm(self.eval_dataloader, desc='Eval       ', position=2, leave=False)):
                 self.set_input(data_i)
-                activations = self.modelG.module.model[:self.opt.layer_idx](self.img1)
-                if self.opt.crop_size == 256:
-                    resize_size = 64
-                elif self.opt.crop_size == 512:
-                    resize_size = 128
-                img1_resized = F.interpolate(self.img1, size=resize_size, mode='bicubic')
-                img2_resized = F.interpolate(self.img2, size=resize_size, mode='bicubic')
-                fake_diff = self.netR(torch.cat((img1_resized, img2_resized, activations), 1), 0)
-                real_im = self.modelG.module.model(self.img2)
-                fake_im = self.modelG.module.model[self.opt.layer_idx:](activations + fake_diff)
-        
-                for j in range(len(self.image_paths)):
-                    name = self.image_paths[j]
-                    input1_im = tensor2im(self.img1)
-                    input2_im = tensor2im(self.img2)
-                    real_im = tensor2im(real_im)
-                    fake_im = tensor2im(fake_im)
-                    save_image(input1_im, os.path.join(save_dir, 'input1', '%s' % name), create_dir=True)
-                    save_image(input2_im, os.path.join(save_dir, 'input2', '%s' % name), create_dir=True)
-                    save_image(real_im, os.path.join(save_dir, 'real', '%s' % name), create_dir=True)
-                    save_image(fake_im, os.path.join(save_dir, 'fake', '%s' % name), create_dir=True)
+                activations = self.modelG.module.model[:self.opt.layer_idx](self.img1) # randomly chosen image
+                
+                for j in range(1, self.opt.max_interval):
+                    # self.img1 : reference frame(past frame)
+                    # self.next_img : next image
+                    img2_paths = []
+                    for batch_idx in range(len(self.img1_paths)):
+                        img1_name, img1_ext = os.path.splitext(self.img1_paths[batch_idx])
+                        img2_idx = int(img1_name.split("_")[1]) + j
+                        img2_name =  "%s_%05d%s" %(img1_name.split("_")[0], img2_idx, img1_ext)
+                        img2_path = os.path.join(self.image_root[batch_idx], img2_name) 
+                        img2_paths.append(img2_path)
+                    self.set_test_input(img2_paths) # load an image (img1 + interval) as a batch
+                    img1_resized = F.interpolate(self.img1, size=activations.shape[2:], mode='bicubic')
+                    nextimg_resized = F.interpolate(self.next_img, size=activations.shape[2:], mode='bicubic')
+                    fake_diff = self.netR(torch.cat((img1_resized, nextimg_resized, activations), 1), 0)
+                    real_im = self.modelG.module.model(self.next_img)
+                    fake_im = self.modelG.module.model[self.opt.layer_idx:](activations + fake_diff)
+            
+                    for k in range(len(self.img1_paths)):
+                        img1_name, _= os.path.splitext(self.img1_paths[k])
+                        name = f"{img1_name}_{j}.png" # interval_originalname
+                        input1_im = tensor2im(self.img1, idx=k)
+                        input2_im = tensor2im(self.next_img, idx=k)
+                        real = tensor2im(real_im, idx=k)
+                        fake = tensor2im(fake_im, idx=k)
+                        save_image(input1_im, os.path.join(save_dir, 'input1', '%s' % self.img1_paths[k]), create_dir=True)
+                        save_image(input2_im, os.path.join(save_dir, 'input2', '%s' % name), create_dir=True)
+                        save_image(real, os.path.join(save_dir, 'real', '%s' % name), create_dir=True)
+                        save_image(fake, os.path.join(save_dir, 'fake', '%s' % name), create_dir=True)
 
         self.netR.train()
     
@@ -210,10 +225,11 @@ class REDModel(BaseModel):
                 img_list = sorted(os.listdir(seq_i['seq_path'][0]))[:400] # limit length of test video
                 for i, data_i in enumerate(img_list):
                     data_path = os.path.join(seq_i['seq_path'][0], data_i)
+                    data_path = [data_path]
                     self.set_test_input(data_path)
                     if i % self.opt.max_interval == 0:
-                        reference_img = self.img1
-                        fake_im = self.modelG.module.model(self.img1)
+                        reference_img = self.next_img
+                        fake_im = self.modelG.module.model(self.next_img)
                         real_im = fake_im
                     else:
                         activations = self.modelG.module.model[:self.opt.layer_idx](reference_img)
@@ -221,15 +237,15 @@ class REDModel(BaseModel):
                             resize_size = 64
                         elif self.opt.crop_size == 512:
                             resize_size = 128
-                        img1_resized = F.interpolate(reference_img, size=resize_size, mode='bicubic')
-                        img2_resized = F.interpolate(self.img1, size=resize_size, mode='bicubic')
-                        fake_diff = self.netR(torch.cat((img1_resized, img2_resized, activations), 1), 0)
-                        real_im = self.modelG.module.model(self.img1)
+                        ref_resized = F.interpolate(reference_img, size=resize_size, mode='bicubic')
+                        nextimg_resized = F.interpolate(self.next_img, size=resize_size, mode='bicubic')
+                        fake_diff = self.netR(torch.cat((ref_resized, nextimg_resized, activations), 1), 0)
+                        real_im = self.modelG.module.model(self.next_img)
                         fake_im = self.modelG.module.model[self.opt.layer_idx:](activations + fake_diff)
                     
                     
                     name = f"{vid_name}_{i}.png"
-                    input_im = tensor2im(self.img1)
+                    input_im = tensor2im(self.next_img)
                     real_im = tensor2im(real_im)
                     fake_im = tensor2im(fake_im)
                     cat_img = np.concatenate((input_im, real_im, fake_im), axis=1)

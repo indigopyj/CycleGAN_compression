@@ -19,16 +19,13 @@
             "program": "train_RED.py",
             "console": "integratedTerminal",
             "args": ["--main_G_path", "/home/nas2_userH/yeojeongpark/compression/pytorch-CycleGAN-and-pix2pix/checkpoints/viper2cityscapes_cyclegan/45_net_G_A.pth",
-                     "--main_D_path", "/home/nas2_userH/yeojeongpark/compression/pytorch-CycleGAN-and-pix2pix/checkpoints/viper2cityscapes_cyclegan/45_net_D_A.pth",
                      "--dataroot", "/home/nas2_userH/yeojeongpark/compression/dataset/",
                      "--name", "debug_RED",
                      "--dataset_mode", "video",
                      //"--serial_batches",
                      "--tensorboard_dir", "./tensorboard",
                      "--Viper2Cityscapes",
-                     "--layer_idx", "13", "--max_interval", "5", "--lambda_L1_out", "10",
-                     "--save_latest_freq", "1",
-                     "--GAN_loss"
+                     "--layer_idx", "13", "--max_interval", "5", "--lambda_L1_out", "10", "--save_latest_freq", "200"
                     ],
             "env":    {
                         "CUDA_VISIBLE_DEVICES":"4"                //"2,3,4,5"
@@ -64,7 +61,7 @@
                      "--phase", "test",
                      "--no_dropout",
                      "--Viper2Cityscapes",
-                     "--num_test", "1"
+                     "--num_test", "2"
                     ],
             "env":    {
                         "CUDA_VISIBLE_DEVICES":"0"                //"2,3,4,5"
