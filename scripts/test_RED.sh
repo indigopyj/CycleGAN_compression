@@ -1,7 +1,7 @@
 set -ex
 python test_RED.py --dataroot ../dataset/ \
 --main_G_path checkpoints/viper2cityscapes_cyclegan/45_net_G_A.pth \
---name viper2city_red_iv5_gan --no_dropout \
+--name viper2city_red_iv5 --no_dropout \
 --dataset_mode video \
 --Viper2Cityscapes \
 --phase test \

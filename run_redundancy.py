@@ -28,8 +28,13 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 """
 from glob import glob
 import os
+
 from PIL import Image
+import torch
+from torch.nn import functional as F
 from tqdm import tqdm
+
+
 
 from data.base_dataset import get_transform
 from models import create_model
@@ -52,15 +57,34 @@ if __name__ == '__main__':
     # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
     if opt.eval:
         model.eval()
-    print(model.netG_A)
-    exit()
 
     transform = get_transform(opt, grayscale=False)
 
+    cc_sum = []
+    rmse_sum = [0. for _ in range(11, 20)]
+
     paths = sorted(glob(os.path.join(opt.dataroot, 'Viper/val/img/*')))
     for path in tqdm(paths, desc='Test       ', position=0, leave=False):
-        filenames = sorted(os.listdir(path))
-        for filename in tqdm(filenames, desc='Frame      ', position=1, leave=False):
+        filenames = sorted(os.listdir(path))[:opt.num_test]
+
+        prev_activations = []
+        for i, filename in enumerate(tqdm(filenames, desc='Frame      ', position=1, leave=False)):
             A_img = Image.open(os.path.join(path, filename)).convert("RGB")
-            A = transform(A_img).cuda()
-            model.netG_A(A)
+            A = transform(A_img).unsqueeze(0).cuda()
+
+            x = A
+            st = 0
+            activations = []
+            for fi in range(11, 20):
+                x = model.netG_A.module.model[st:fi](x)
+                st = fi
+                activations.append(x)
+
+            if i > 0:
+                for j, (prev_actv, actv) in enumerate(zip(prev_activations, activations)):
+                    rmse = torch.sqrt(F.mse_loss(prev_actv, actv))
+                    rmse_sum[j] += rmse.item()
+            prev_activations = activations
+
+    for i, fi in enumerate(range(11, 20)):
+        print("{}: {}".format(fi - 1, rmse_sum[i] / (len(paths) * opt.num_test)))

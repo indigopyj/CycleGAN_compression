@@ -64,7 +64,7 @@
                      "--phase", "test",
                      "--no_dropout",
                      "--Viper2Cityscapes",
-                     "--num_test", "15"
+                     "--num_test", "1"
                     ],
             "env":    {
                         "CUDA_VISIBLE_DEVICES":"0"                //"2,3,4,5"

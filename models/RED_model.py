@@ -196,7 +196,7 @@ class REDModel(BaseModel):
     def test_model(self, result_path):
         
         self.save_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
-        os.makedirs(result_path, exist_ok=True)
+        
         self.netR.eval()
         self.test_dataloader = create_eval_dataloader(self.opt, "test")
 
@@ -216,7 +216,7 @@ class REDModel(BaseModel):
                         fake_im = self.modelG.module.model(self.img1)
                         real_im = fake_im
                     else:
-                        activations = self.modelG.module.model[:self.opt.layer_idx](self.img1)
+                        activations = self.modelG.module.model[:self.opt.layer_idx](reference_img)
                         if self.opt.crop_size == 256:
                             resize_size = 64
                         elif self.opt.crop_size == 512:
@@ -228,7 +228,7 @@ class REDModel(BaseModel):
                         fake_im = self.modelG.module.model[self.opt.layer_idx:](activations + fake_diff)
                     
                     
-                    name = f"{seq_i['seq_path'][0]}_{i}.png"
+                    name = f"{vid_name}_{i}.png"
                     input_im = tensor2im(self.img1)
                     real_im = tensor2im(real_im)
                     fake_im = tensor2im(fake_im)
