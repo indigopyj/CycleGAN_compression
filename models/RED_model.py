@@ -187,7 +187,7 @@ class REDModel(BaseModel):
                         img2_name =  "%s_%05d%s" %(img1_name.split("_")[0], img2_idx, img1_ext)
                         img2_path = os.path.join(self.image_root[batch_idx], img2_name) 
                         img2_paths.append(img2_path)
-                    self.set_test_input(img2_paths) # load an image (img1 + interval) as a batch
+                    self.set_test_input(img2_paths) # load an next image (img1 + interval) as a batch
                     img1_resized = F.interpolate(self.img1, size=activations.shape[2:], mode='bicubic')
                     nextimg_resized = F.interpolate(self.next_img, size=activations.shape[2:], mode='bicubic')
                     fake_diff = self.netR(torch.cat((img1_resized, nextimg_resized, activations), 1), 0)
@@ -221,7 +221,7 @@ class REDModel(BaseModel):
                     break
                
                 vid_name = seq_i['seq_path'][0].split("/")[-1]
-                video = cv2.VideoWriter(os.path.join(result_path, vid_name+'.mp4'), fourcc=cv2.VideoWriter_fourcc(*'mp4v'), fps=30, frameSize=(768, 256))
+                video = cv2.VideoWriter(os.path.join(result_path, vid_name+'.mp4'), fourcc=cv2.VideoWriter_fourcc(*'mp4v'), fps=10, frameSize=(768, 256))
                 img_list = sorted(os.listdir(seq_i['seq_path'][0]))[:400] # limit length of test video
                 for i, data_i in enumerate(img_list):
                     data_path = os.path.join(seq_i['seq_path'][0], data_i)
@@ -231,13 +231,14 @@ class REDModel(BaseModel):
                         reference_img = self.next_img
                         fake_im = self.modelG.module.model(self.next_img)
                         real_im = fake_im
-                    else:
                         activations = self.modelG.module.model[:self.opt.layer_idx](reference_img)
+                        ref_resized = F.interpolate(reference_img, size=resize_size, mode='bicubic')
+                    else:
+                        
                         if self.opt.crop_size == 256:
                             resize_size = 64
                         elif self.opt.crop_size == 512:
                             resize_size = 128
-                        ref_resized = F.interpolate(reference_img, size=resize_size, mode='bicubic')
                         nextimg_resized = F.interpolate(self.next_img, size=resize_size, mode='bicubic')
                         fake_diff = self.netR(torch.cat((ref_resized, nextimg_resized, activations), 1), 0)
                         real_im = self.modelG.module.model(self.next_img)
