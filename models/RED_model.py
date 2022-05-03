@@ -214,6 +214,10 @@ class REDModel(BaseModel):
         
         self.netR.eval()
         self.test_dataloader = create_eval_dataloader(self.opt, "test")
+        if self.opt.crop_size == 256:
+            resize_size = 64
+        elif self.opt.crop_size == 512:
+            resize_size = 128
 
         with torch.no_grad():
             for seq_idx, seq_i in enumerate(tqdm(self.test_dataloader, desc='Eval       ', position=2, leave=False)):
@@ -235,10 +239,6 @@ class REDModel(BaseModel):
                         ref_resized = F.interpolate(reference_img, size=resize_size, mode='bicubic')
                     else:
                         
-                        if self.opt.crop_size == 256:
-                            resize_size = 64
-                        elif self.opt.crop_size == 512:
-                            resize_size = 128
                         nextimg_resized = F.interpolate(self.next_img, size=resize_size, mode='bicubic')
                         fake_diff = self.netR(torch.cat((ref_resized, nextimg_resized, activations), 1), 0)
                         real_im = self.modelG.module.model(self.next_img)
